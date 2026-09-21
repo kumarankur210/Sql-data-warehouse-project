@@ -93,3 +93,72 @@ LEFT JOIN gold.dim_products pr
 LEFT JOIN gold.dim_customers cu
     ON sd.sls_cust_id = cu.customer_id;
 GO
+-- ===============================================================================
+-- Create Dimension: gold.dim_date
+-- ===============================================================================
+IF OBJECT_ID('gold.dim_date', 'U') IS NOT NULL
+    DROP TABLE gold.dim_date;
+GO
+
+CREATE TABLE gold.dim_date (
+    date_key         INT PRIMARY KEY,
+    date             DATE NOT NULL,
+    year             INT NOT NULL,
+    quarter          INT NOT NULL,
+    quarter_name     VARCHAR(2) NOT NULL,
+    month            INT NOT NULL,
+    month_name       VARCHAR(15) NOT NULL,
+    month_name_short VARCHAR(3) NOT NULL,
+    week_of_year     INT NOT NULL,
+    day_of_month     INT NOT NULL,
+    day_of_week      INT NOT NULL,
+    day_name         VARCHAR(15) NOT NULL,
+    is_weekend       BIT NOT NULL
+);
+GO
+
+-- Populate gold.dim_date (2000 - 2030)
+DECLARE @StartDate DATE = '2000-01-01';
+DECLARE @EndDate DATE = '2030-12-31';
+
+WITH Numbers AS (
+    SELECT TOP (DATEDIFF(DAY, @StartDate, @EndDate) + 1)
+        ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) - 1 AS N
+    FROM sys.all_objects a
+    CROSS JOIN sys.all_objects b
+),
+Dates AS (
+    SELECT DATEADD(DAY, N, @StartDate) AS CurrentDate
+    FROM Numbers
+)
+INSERT INTO gold.dim_date (
+    date_key,
+    date,
+    year,
+    quarter,
+    quarter_name,
+    month,
+    month_name,
+    month_name_short,
+    week_of_year,
+    day_of_month,
+    day_of_week,
+    day_name,
+    is_weekend
+)
+SELECT 
+    CAST(CONVERT(VARCHAR(8), CurrentDate, 112) AS INT) AS date_key,
+    CurrentDate AS date,
+    YEAR(CurrentDate) AS year,
+    DATEPART(QUARTER, CurrentDate) AS quarter,
+    'Q' + CAST(DATEPART(QUARTER, CurrentDate) AS VARCHAR(1)) AS quarter_name,
+    MONTH(CurrentDate) AS month,
+    DATENAME(MONTH, CurrentDate) AS month_name,
+    LEFT(DATENAME(MONTH, CurrentDate), 3) AS month_name_short,
+    DATEPART(WEEK, CurrentDate) AS week_of_year,
+    DAY(CurrentDate) AS day_of_month,
+    DATEPART(WEEKDAY, CurrentDate) AS day_of_week,
+    DATENAME(WEEKDAY, CurrentDate) AS day_name,
+    CASE WHEN DATENAME(WEEKDAY, CurrentDate) IN ('Saturday', 'Sunday') THEN 1 ELSE 0 END AS is_weekend
+FROM Dates;
+GO
